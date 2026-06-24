@@ -1,0 +1,156 @@
+import { useState } from 'react'
+import { Link, Navigate, useParams } from 'react-router-dom'
+import { useAeon } from '../store'
+import { CATS } from '../lib/categories'
+import { hz, horizonDate } from '../lib/horizons'
+import { age, pct } from '../lib/format'
+import type { Milestone, Requirement } from '../types'
+
+export default function MilestoneDetail() {
+  const { id } = useParams()
+  const s = useAeon()
+  const addReq = useAeon((st) => st.addReq)
+  const toggleReq = useAeon((st) => st.toggleReq)
+
+  if (!s.dob || !s.name) return <Navigate to="/" replace />
+  const m = s.milestones.find((x) => x.id === id)
+  if (!m) return <Navigate to="/vision" replace />
+
+  const col = CATS[m.cat] || '#8b5cf6'
+  const p = pct(m)
+  const total = m.have.length + m.need.length
+  const willBe = age(s.dob) + Math.floor(hz(m.hz).days / 365)
+  const target = horizonDate(m.hz).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
+
+  return (
+    <section id="view-milestone" className="fade-in">
+      <div className="crumbs">
+        <Link to="/vision">Vision Board</Link>
+        <span className="sep">›</span>
+        <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{m.title}</span>
+      </div>
+
+      <div className="glass detail-hero">
+        <div className="glow" style={{ background: `radial-gradient(circle at 20% 0,${col},transparent 60%)` }} />
+        <span className="pill" style={{ borderColor: `${col}55`, color: col }}>
+          <span className="cd" style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block' }} />
+          {m.cat} · {hz(m.hz).label} horizon
+        </span>
+        <h2>{m.title}</h2>
+        <div className="why">{m.why || ''}</div>
+        <div className="bigprog">
+          <div
+            className="ring"
+            style={{ background: `conic-gradient(${col} ${p}%,rgba(255,255,255,.08) 0)` }}
+          >
+            <b>{p}%</b>
+          </div>
+          <div className="meta">
+            <div className="a">{m.have.length} of {total} pieces in place</div>
+            <div className="b">Target {target} · you'll be {willBe}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="req-cols">
+        <ReqColumn
+          milestone={m}
+          type="have"
+          icon="✓"
+          heading="What I already have"
+          color="have-col"
+          placeholder="Add something you already have…"
+          empty="Nothing here yet — add what you already have working for you."
+          onAdd={(text) => addReq(m.id, 'have', text)}
+          onToggle={(i) => toggleReq(m.id, 'have', i)}
+        />
+        <ReqColumn
+          milestone={m}
+          type="need"
+          icon="◷"
+          heading="What's still pending"
+          color="need-col"
+          placeholder="Add something you still need…"
+          empty="Add the gaps between you and this milestone."
+          onAdd={(text) => addReq(m.id, 'need', text)}
+          onToggle={(i) => toggleReq(m.id, 'need', i)}
+        />
+      </div>
+
+      <p className="second-note" style={{ marginTop: 20 }}>
+        Tip: check off a "pending" item when you achieve it — it moves to "have" and your milestone
+        progress climbs. In <b>Phase 2</b>, your daily timeline entries auto-link here to show you
+        converging on each goal.
+      </p>
+    </section>
+  )
+}
+
+function ReqColumn({
+  milestone,
+  type,
+  icon,
+  heading,
+  color,
+  placeholder,
+  empty,
+  onAdd,
+  onToggle,
+}: {
+  milestone: Milestone
+  type: 'have' | 'need'
+  icon: string
+  heading: string
+  color: string
+  placeholder: string
+  empty: string
+  onAdd: (text: string) => void
+  onToggle: (index: number) => void
+}) {
+  const items: Requirement[] = type === 'have' ? milestone.have : milestone.need
+  const [text, setText] = useState('')
+
+  function add() {
+    if (!text.trim()) return
+    onAdd(text)
+    setText('')
+  }
+
+  return (
+    <div className={`glass req-col ${color}`}>
+      <h4>
+        <span className="ic">{icon}</span> {heading}{' '}
+        <span className="toachieve">(to achieve the milestone)</span>
+        <span className="badge">{items.length}</span>
+      </h4>
+      <div>
+        {items.length ? (
+          items.map((r, i) => (
+            <div className={`req ${type === 'have' ? 'have' : ''}`} key={i}>
+              <div className="ck" onClick={() => onToggle(i)}>
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M5 13l4 4L19 7" stroke="#06281d" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div className="rt">
+                <div className="rn">{r.t}</div>
+                {r.d ? <div className="rd">{r.d}</div> : null}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '6px 0' }}>{empty}</div>
+        )}
+      </div>
+      <div className="req-add">
+        <input
+          placeholder={placeholder}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') add() }}
+        />
+        <button className="btn sm" onClick={add}>Add</button>
+      </div>
+    </div>
+  )
+}
