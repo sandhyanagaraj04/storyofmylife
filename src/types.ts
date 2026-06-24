@@ -1,4 +1,9 @@
-export type CategoryName =
+/* ============================================================
+   Aeon data model — mirrors the prototype's localStorage shape
+   (key: "aeon") so behaviour & persistence match exactly.
+   ============================================================ */
+
+export type CatName =
   | 'Financial'
   | 'Career'
   | 'Health'
@@ -6,54 +11,38 @@ export type CategoryName =
   | 'Relationships'
   | 'Adventure'
 
-export type Horizon = 5 | 10 | 20 | 30
-
-export interface User {
-  id: string
-  name: string
-  dob: string // ISO date "YYYY-MM-DD"
-  placeOfBirth: string
-  lifeSpan: number // default 90
-  createdAt: string
-}
-
-export interface Entry {
-  id: string
-  time: string // "HH:MM" or "HH:MM:SS"
-  title: string
-  detail: string
-  category: CategoryName | null
-  mood: null // reserved (Phase 3)
-  createdAt: string
-}
+/** entries may carry no category ("") until classified */
+export type EntryCat = CatName | ''
 
 export interface Requirement {
-  id: string
-  text: string
-  detail: string
+  t: string // text
+  d: string // detail
 }
 
 export interface Milestone {
   id: string
   title: string
   why: string
-  category: CategoryName
-  horizon: Horizon
-  targetYear: number
+  cat: CatName
+  hz: string // horizon key, e.g. "5y"
   have: Requirement[]
-  pending: Requirement[]
-  createdAt: string
+  need: Requirement[]
 }
 
-export interface UiState {
-  activeHorizon: Horizon
-  activeCategory: CategoryName | 'All'
+export interface Entry {
+  time: string // "HH:MM" (24h)
+  t: string // title
+  d: string // detail
+  cat: EntryCat
 }
 
-export interface AeonDoc {
-  user: User | null
-  // entries keyed by "YYYY-M-D" (month 0-indexed)
-  entries: Record<string, Entry[]>
+export interface AeonState {
+  name: string
+  dob: string // "YYYY-MM-DD"
+  place: string
+  activeHorizon: string
+  activeCat: CatName | 'All'
   milestones: Milestone[]
-  ui: UiState
+  // entries keyed by "Y-M-D" (month 0-indexed, matching JS Date)
+  entries: Record<string, Entry[]>
 }
