@@ -1,16 +1,21 @@
 import { useState } from 'react'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAeon } from '../store'
 import { CATS } from '../lib/categories'
 import { hz, horizonDate } from '../lib/horizons'
 import { age, pct } from '../lib/format'
+import MilestoneModal from '../components/MilestoneModal'
 import type { Milestone, Requirement } from '../types'
 
 export default function MilestoneDetail() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const s = useAeon()
   const addReq = useAeon((st) => st.addReq)
   const toggleReq = useAeon((st) => st.toggleReq)
+  const deleteReq = useAeon((st) => st.deleteReq)
+  const deleteMilestone = useAeon((st) => st.deleteMilestone)
+  const [editOpen, setEditOpen] = useState(false)
 
   if (!s.dob || !s.name) return <Navigate to="/" replace />
   const m = s.milestones.find((x) => x.id === id)
@@ -22,6 +27,13 @@ export default function MilestoneDetail() {
   const willBe = age(s.dob) + Math.floor(hz(m.hz).days / 365)
   const target = horizonDate(m.hz).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })
 
+  function remove() {
+    if (window.confirm(`Delete "${m!.title}"? This can't be undone.`)) {
+      deleteMilestone(m!.id)
+      navigate('/vision')
+    }
+  }
+
   return (
     <section id="view-milestone" className="fade-in">
       <div className="crumbs">
@@ -32,6 +44,10 @@ export default function MilestoneDetail() {
 
       <div className="glass detail-hero">
         <div className="glow" style={{ background: `radial-gradient(circle at 20% 0,${col},transparent 60%)` }} />
+        <div style={{ position: 'absolute', top: 18, right: 18, display: 'flex', gap: 8, zIndex: 2 }}>
+          <button className="btn ghost sm" onClick={() => setEditOpen(true)}>Edit</button>
+          <button className="btn ghost sm" onClick={remove}>Delete</button>
+        </div>
         <span className="pill" style={{ borderColor: `${col}55`, color: col }}>
           <span className="cd" style={{ width: 8, height: 8, borderRadius: '50%', background: col, display: 'inline-block' }} />
           {m.cat} · {hz(m.hz).label} horizon
@@ -63,6 +79,7 @@ export default function MilestoneDetail() {
           empty="Nothing here yet — add what you already have working for you."
           onAdd={(text) => addReq(m.id, 'have', text)}
           onToggle={(reqId) => toggleReq(m.id, reqId)}
+          onDelete={(reqId) => deleteReq(m.id, reqId)}
         />
         <ReqColumn
           milestone={m}
@@ -74,6 +91,7 @@ export default function MilestoneDetail() {
           empty="Add the gaps between you and this milestone."
           onAdd={(text) => addReq(m.id, 'need', text)}
           onToggle={(reqId) => toggleReq(m.id, reqId)}
+          onDelete={(reqId) => deleteReq(m.id, reqId)}
         />
       </div>
 
@@ -82,6 +100,8 @@ export default function MilestoneDetail() {
         progress climbs. In <b>Phase 2</b>, your daily timeline entries auto-link here to show you
         converging on each goal.
       </p>
+
+      <MilestoneModal open={editOpen} onClose={() => setEditOpen(false)} editing={m} />
     </section>
   )
 }
@@ -96,6 +116,7 @@ function ReqColumn({
   empty,
   onAdd,
   onToggle,
+  onDelete,
 }: {
   milestone: Milestone
   type: 'have' | 'need'
@@ -106,6 +127,7 @@ function ReqColumn({
   empty: string
   onAdd: (text: string) => void
   onToggle: (reqId: string) => void
+  onDelete: (reqId: string) => void
 }) {
   const items: Requirement[] = type === 'have' ? milestone.have : milestone.need
   const [text, setText] = useState('')
@@ -136,6 +158,14 @@ function ReqColumn({
                 <div className="rn">{r.t}</div>
                 {r.d ? <div className="rd">{r.d}</div> : null}
               </div>
+              <button
+                className="req-del"
+                aria-label="Delete item"
+                title="Delete"
+                onClick={() => onDelete(r.id)}
+              >
+                ×
+              </button>
             </div>
           ))
         ) : (

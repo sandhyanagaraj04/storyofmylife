@@ -11,8 +11,11 @@ import { supabase } from './lib/supabase'
 export type Mutation =
   | { kind: 'profile' }
   | { kind: 'milestone'; milestone: Milestone }
+  | { kind: 'updateMilestone'; milestone: Milestone }
+  | { kind: 'deleteMilestone'; id: string }
   | { kind: 'entry'; key: string; entry: Entry }
   | { kind: 'requirement'; milestoneId: string; reqKind: 'have' | 'need'; req: Requirement }
+  | { kind: 'deleteRequirement'; reqId: string }
   | { kind: 'toggle'; reqId: string; to: 'have' | 'need' }
   | { kind: 'seed'; milestones: Milestone[]; entries: Record<string, Entry[]> }
 
@@ -134,6 +137,27 @@ export class SupabaseBackend implements Backend {
         const { error } = await this.db.from('milestones').insert({
           id: x.id, user_id: uid, title: x.title, why: x.why, cat: x.cat, hz: x.hz,
         })
+        if (error) throw error
+        return
+      }
+      case 'updateMilestone': {
+        const x = m.milestone
+        const { error } = await this.db.from('milestones')
+          .update({ title: x.title, why: x.why, cat: x.cat, hz: x.hz })
+          .eq('id', x.id).eq('user_id', uid)
+        if (error) throw error
+        return
+      }
+      case 'deleteMilestone': {
+        // requirements cascade via FK ON DELETE CASCADE
+        const { error } = await this.db.from('milestones')
+          .delete().eq('id', m.id).eq('user_id', uid)
+        if (error) throw error
+        return
+      }
+      case 'deleteRequirement': {
+        const { error } = await this.db.from('requirements')
+          .delete().eq('id', m.reqId).eq('user_id', uid)
         if (error) throw error
         return
       }

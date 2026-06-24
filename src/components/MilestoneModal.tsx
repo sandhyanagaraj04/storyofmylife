@@ -2,18 +2,22 @@ import { useEffect, useRef, useState } from 'react'
 import { useAeon } from '../store'
 import { CAT_NAMES } from '../lib/categories'
 import { HORIZONS } from '../lib/horizons'
-import type { CatName } from '../types'
+import type { CatName, Milestone } from '../types'
 
 export default function MilestoneModal({
   open,
   onClose,
+  editing,
 }: {
   open: boolean
   onClose: () => void
+  /** when present, the modal edits this milestone instead of creating one */
+  editing?: Milestone
 }) {
   const activeCat = useAeon((s) => s.activeCat)
   const activeHorizon = useAeon((s) => s.activeHorizon)
   const addMilestone = useAeon((s) => s.addMilestone)
+  const updateMilestone = useAeon((s) => s.updateMilestone)
   const titleRef = useRef<HTMLInputElement>(null)
 
   const defaultCat: CatName = activeCat === 'All' ? 'Financial' : activeCat
@@ -22,32 +26,36 @@ export default function MilestoneModal({
   const [cat, setCat] = useState<CatName>(defaultCat)
   const [hz, setHz] = useState(activeHorizon)
 
-  // re-sync defaults each time the modal opens
+  // re-sync fields each time the modal opens (edit values or create defaults)
   useEffect(() => {
     if (open) {
-      setTitle('')
-      setWhy('')
-      setCat(activeCat === 'All' ? 'Financial' : activeCat)
-      setHz(activeHorizon)
+      setTitle(editing ? editing.title : '')
+      setWhy(editing ? editing.why : '')
+      setCat(editing ? editing.cat : activeCat === 'All' ? 'Financial' : activeCat)
+      setHz(editing ? editing.hz : activeHorizon)
       const id = setTimeout(() => titleRef.current?.focus(), 60)
       return () => clearTimeout(id)
     }
-  }, [open, activeCat, activeHorizon])
+  }, [open, editing, activeCat, activeHorizon])
 
   function save() {
     if (!title.trim()) {
       titleRef.current?.focus()
       return
     }
-    addMilestone({ title: title.trim(), why: why.trim(), cat, hz })
+    if (editing) {
+      updateMilestone(editing.id, { title: title.trim(), why: why.trim(), cat, hz })
+    } else {
+      addMilestone({ title: title.trim(), why: why.trim(), cat, hz })
+    }
     onClose()
   }
 
   return (
     <div className={`modal-bg ${open ? 'show' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className="glass modal">
-        <h3>New milestone</h3>
-        <p className="h">A future worth planning for.</p>
+        <h3>{editing ? 'Edit milestone' : 'New milestone'}</h3>
+        <p className="h">{editing ? 'Make it yours.' : 'A future worth planning for.'}</p>
         <div className="field">
           <label>Milestone</label>
           <input
@@ -87,7 +95,7 @@ export default function MilestoneModal({
         </div>
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn" onClick={save}>Add to board</button>
+          <button className="btn" onClick={save}>{editing ? 'Save changes' : 'Add to board'}</button>
         </div>
       </div>
     </div>

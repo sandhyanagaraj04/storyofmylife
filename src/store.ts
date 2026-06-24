@@ -43,8 +43,11 @@ interface AeonStore extends AeonState {
   setHorizon: (key: string) => void
   setCat: (cat: CatName | 'All') => void
   addMilestone: (m: Omit<Milestone, 'id' | 'have' | 'need'>) => void
+  updateMilestone: (id: string, patch: Pick<Milestone, 'title' | 'why' | 'cat' | 'hz'>) => void
+  deleteMilestone: (id: string) => void
   addEntry: (key: string, time: string, text: string) => void
   addReq: (milestoneId: string, type: 'have' | 'need', text: string) => void
+  deleteReq: (milestoneId: string, reqId: string) => void
   toggleReq: (milestoneId: string, reqId: string) => void
 }
 
@@ -134,6 +137,25 @@ export const useAeon = create<AeonStore>((set, get) => {
         return [{ kind: 'milestone', milestone }, { kind: 'profile' }]
       }),
 
+    updateMilestone: (id, patch) =>
+      run((s) => {
+        const m = s.milestones.find((x) => x.id === id)
+        if (!m) return []
+        m.title = patch.title
+        m.why = patch.why
+        m.cat = patch.cat
+        m.hz = patch.hz
+        return [{ kind: 'updateMilestone', milestone: m }]
+      }),
+
+    deleteMilestone: (id) =>
+      run((s) => {
+        const i = s.milestones.findIndex((x) => x.id === id)
+        if (i < 0) return []
+        s.milestones.splice(i, 1)
+        return [{ kind: 'deleteMilestone', id }]
+      }),
+
     addEntry: (key, time, text) =>
       run((s) => {
         const t = text.trim()
@@ -152,6 +174,20 @@ export const useAeon = create<AeonStore>((set, get) => {
         const req = { id: uid(), t, d: '' }
         ;(type === 'have' ? m.have : m.need).push(req)
         return [{ kind: 'requirement', milestoneId, reqKind: type, req }]
+      }),
+
+    deleteReq: (milestoneId, reqId) =>
+      run((s) => {
+        const m = s.milestones.find((x) => x.id === milestoneId)
+        if (!m) return []
+        const inHave = m.have.findIndex((r) => r.id === reqId)
+        if (inHave >= 0) m.have.splice(inHave, 1)
+        else {
+          const inNeed = m.need.findIndex((r) => r.id === reqId)
+          if (inNeed < 0) return []
+          m.need.splice(inNeed, 1)
+        }
+        return [{ kind: 'deleteRequirement', reqId }]
       }),
 
     toggleReq: (milestoneId, reqId) =>
