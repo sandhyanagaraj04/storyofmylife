@@ -1,6 +1,8 @@
 /* ============================================================
-   Aeon data model — mirrors the prototype's localStorage shape
-   (key: "aeon") so behaviour & persistence match exactly.
+   Aeon data model.
+   In local mode this is persisted as one JSON doc (key "aeon").
+   In cloud mode it is assembled from / written to Supabase tables.
+   Items carry stable ids so normalized rows map cleanly.
    ============================================================ */
 
 export type CatName =
@@ -15,6 +17,7 @@ export type CatName =
 export type EntryCat = CatName | ''
 
 export interface Requirement {
+  id: string
   t: string // text
   d: string // detail
 }
@@ -30,6 +33,7 @@ export interface Milestone {
 }
 
 export interface Entry {
+  id: string
   time: string // "HH:MM" (24h)
   t: string // title
   d: string // detail
@@ -46,3 +50,9 @@ export interface AeonState {
   // entries keyed by "Y-M-D" (month 0-indexed, matching JS Date)
   entries: Record<string, Entry[]>
 }
+
+/** The profile-level fields (everything except the collections). */
+export type ProfileFields = Pick<
+  AeonState,
+  'name' | 'dob' | 'place' | 'activeHorizon' | 'activeCat'
+>

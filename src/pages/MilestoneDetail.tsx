@@ -62,7 +62,7 @@ export default function MilestoneDetail() {
           placeholder="Add something you already have…"
           empty="Nothing here yet — add what you already have working for you."
           onAdd={(text) => addReq(m.id, 'have', text)}
-          onToggle={(i) => toggleReq(m.id, 'have', i)}
+          onToggle={(reqId) => toggleReq(m.id, reqId)}
         />
         <ReqColumn
           milestone={m}
@@ -73,7 +73,7 @@ export default function MilestoneDetail() {
           placeholder="Add something you still need…"
           empty="Add the gaps between you and this milestone."
           onAdd={(text) => addReq(m.id, 'need', text)}
-          onToggle={(i) => toggleReq(m.id, 'need', i)}
+          onToggle={(reqId) => toggleReq(m.id, reqId)}
         />
       </div>
 
@@ -105,7 +105,7 @@ function ReqColumn({
   placeholder: string
   empty: string
   onAdd: (text: string) => void
-  onToggle: (index: number) => void
+  onToggle: (reqId: string) => void
 }) {
   const items: Requirement[] = type === 'have' ? milestone.have : milestone.need
   const [text, setText] = useState('')
@@ -125,9 +125,9 @@ function ReqColumn({
       </h4>
       <div>
         {items.length ? (
-          items.map((r, i) => (
-            <div className={`req ${type === 'have' ? 'have' : ''}`} key={i}>
-              <div className="ck" onClick={() => onToggle(i)}>
+          items.map((r) => (
+            <div className={`req ${type === 'have' ? 'have' : ''}`} key={r.id}>
+              <div className="ck" onClick={() => onToggle(r.id)}>
                 <svg viewBox="0 0 24 24" fill="none">
                   <path d="M5 13l4 4L19 7" stroke="#06281d" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
