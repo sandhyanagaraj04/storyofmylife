@@ -18,6 +18,7 @@ interface AuthCtx {
   email: string | null
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string, name: string) => Promise<{ error: string | null }>
+  signInWithGoogle: () => Promise<{ error: string | null }>
   signOut: () => Promise<void>
 }
 
@@ -50,6 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: null,
         signIn: async () => ({ error: null }),
         signUp: async () => ({ error: null }),
+        signInWithGoogle: async () => ({ error: null }),
         signOut: async () => {},
       }
     }
@@ -75,6 +77,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { error: 'Check your inbox to confirm your email, then sign in.' }
         }
         return { error: null }
+      },
+      signInWithGoogle: async () => {
+        const { error } = await supabase!.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin },
+        })
+        return { error: error?.message ?? null }
       },
       signOut: async () => {
         await supabase!.auth.signOut()
