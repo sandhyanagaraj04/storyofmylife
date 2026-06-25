@@ -1,10 +1,9 @@
 import { create } from 'zustand'
-import type { AeonState, CatName, Milestone, Requirement } from './types'
-import { HORIZONS } from './lib/horizons'
+import type { AeonState, CatName, Entry, Milestone } from './types'
 import { guessCat } from './lib/categories'
 import { uid } from './lib/format'
-
-const KEY = 'aeon'
+import { seedEntries, seedMilestones } from './lib/seed'
+import { type Backend, type Mutation } from './backend'
 
 function emptyState(): AeonState {
   return {
@@ -18,185 +17,196 @@ function emptyState(): AeonState {
   }
 }
 
-function load(): AeonState | null {
-  try {
-    const raw = localStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as AeonState) : null
-  } catch {
-    return null
+/** pull a clean AeonState out of the full store */
+function pick(s: AeonState): AeonState {
+  return {
+    name: s.name,
+    dob: s.dob,
+    place: s.place,
+    activeHorizon: s.activeHorizon,
+    activeCat: s.activeCat,
+    milestones: s.milestones.map((m) => ({ ...m, have: [...m.have], need: [...m.need] })),
+    entries: Object.fromEntries(Object.entries(s.entries).map(([k, v]) => [k, [...v]])),
   }
-}
-
-function persist(s: AeonState) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(s))
-  } catch {
-    /* ignore quota errors */
-  }
-}
-
-/** upgrade old numeric horizons (5/10/20/30) to keys ('5y' etc.) */
-function migrate(s: AeonState): AeonState {
-  const map: Record<number, string> = { 5: '5y', 10: '10y', 20: '20y', 30: '30y' }
-  const ah = s.activeHorizon as unknown
-  if (typeof ah === 'number') s.activeHorizon = map[ah] || '5y'
-  if (!HORIZONS.find((h) => h.key === s.activeHorizon)) s.activeHorizon = '5y'
-  ;(s.milestones || []).forEach((m) => {
-    const h = m.hz as unknown
-    if (typeof h === 'number') m.hz = map[h] || `${h}y`
-  })
-  return s
-}
-
-/** Seed data — pre-loads the board so the demo feels alive (ported verbatim). */
-function seed(s: AeonState): AeonState {
-  s.milestones = [
-    {
-      id: uid(), title: 'Run a half-marathon',
-      why: 'Prove to myself the body can keep up with the ambition.', cat: 'Health', hz: '6mo',
-      have: [{ t: 'Run 5k comfortably', d: '~30 min pace' }],
-      need: [{ t: 'Build to 15k long runs', d: '' }, { t: 'Strength training 2x/week', d: '' }, { t: 'Register for a race', d: '' }],
-    },
-    {
-      id: uid(), title: 'Daily meditation, 90-day streak',
-      why: 'A steady mind underneath a fast life.', cat: 'Spiritual', hz: '3mo',
-      have: [{ t: 'Morning routine exists', d: 'Wake at 6' }],
-      need: [{ t: '20 min sit every day', d: '' }, { t: 'A quiet corner set up', d: '' }],
-    },
-    {
-      id: uid(), title: 'Land first consulting client',
-      why: 'Plant the second income stream early.', cat: 'Career', hz: '2mo',
-      have: [{ t: 'Portfolio site live', d: '' }],
-      need: [{ t: 'Reach out to 20 leads', d: '' }, { t: 'Define a clear offer', d: '' }],
-    },
-    {
-      id: uid(), title: 'Hit ₹2 Cr net worth',
-      why: 'Financial freedom to choose work I love, not work I need.', cat: 'Financial', hz: '5y',
-      have: [{ t: 'Emergency fund (6 months)', d: 'Already parked in liquid funds' }, { t: 'SIP of ₹40k/month running', d: 'Index + flexicap' }],
-      need: [{ t: 'Second income stream', d: 'Consulting or product' }, { t: 'Max out tax-advantaged accounts', d: '' }, { t: 'Buy first rental property', d: '' }],
-    },
-    {
-      id: uid(), title: 'Build & sell a product',
-      why: 'Turn skills into something that outlives my time.', cat: 'Career', hz: '10y',
-      have: [{ t: 'Core engineering skills', d: '' }, { t: 'This life-mapping idea', d: 'Aeon 🙂' }],
-      need: [{ t: 'First 100 paying users', d: '' }, { t: 'Co-founder or small team', d: '' }, { t: '12 months runway', d: '' }],
-    },
-    {
-      id: uid(), title: 'Own a home by the sea',
-      why: 'A place that feels like a deep exhale.', cat: 'Financial', hz: '10y',
-      have: [],
-      need: [{ t: 'Down payment (₹60L)', d: '' }, { t: 'Decide the coast', d: '' }, { t: 'Stable location/work', d: '' }],
-    },
-    {
-      id: uid(), title: 'See 30 countries',
-      why: 'Collect perspectives, not just stamps.', cat: 'Adventure', hz: '20y',
-      have: [{ t: '8 countries so far', d: '' }, { t: 'Remote-friendly work', d: '' }],
-      need: [{ t: '2 trips a year, intentionally', d: '' }, { t: 'Travel fund', d: '' }],
-    },
-    {
-      id: uid(), title: 'Write the family memoir',
-      why: 'So the people after me know where they came from.', cat: 'Relationships', hz: '30y',
-      have: [{ t: 'This timeline of memories', d: 'Aeon captures it' }],
-      need: [{ t: 'Interview parents & elders', d: '' }, { t: 'Digitize old photos', d: '' }],
-    },
-  ]
-  const y = new Date().getFullYear()
-  const m = new Date().getMonth()
-  s.entries[`${y}-${m}-3`] = [{ time: '07:30', t: 'Ran 6k — new personal best 🏃‍♀️', d: 'Felt strong the whole way', cat: 'Health' }]
-  s.entries[`${y}-${m}-9`] = [
-    { time: '14:00', t: 'Closed first consulting client 🎉', d: '₹80k retainer, 3 months', cat: 'Financial' },
-    { time: '21:00', t: 'Dinner with parents', d: 'Talked about the memoir idea', cat: 'Relationships' },
-  ]
-  s.entries[`${y}-${m}-15`] = [{ time: '06:00', t: '20-min meditation, day 12 streak', d: '', cat: 'Spiritual' }]
-  return s
-}
-
-function initialState(): AeonState {
-  const loaded = load()
-  if (loaded) return migrate(loaded)
-  // fresh visitor: pre-seed the board so onboarding leads into a lively demo
-  return seed(emptyState())
 }
 
 interface AeonStore extends AeonState {
+  backend: Backend | null
+  hydrated: boolean
+  lastError: string | null
+
   hasUser: () => boolean
+  init: (backend: Backend) => Promise<void>
+  reset: () => void
+
   startStory: (name: string, dob: string, place: string) => void
   setHorizon: (key: string) => void
   setCat: (cat: CatName | 'All') => void
   addMilestone: (m: Omit<Milestone, 'id' | 'have' | 'need'>) => void
+  updateMilestone: (id: string, patch: Pick<Milestone, 'title' | 'why' | 'cat' | 'hz'>) => void
+  deleteMilestone: (id: string) => void
   addEntry: (key: string, time: string, text: string) => void
-  addReq: (id: string, type: 'have' | 'need', text: string) => void
-  toggleReq: (id: string, type: 'have' | 'need', index: number) => void
+  addReq: (milestoneId: string, type: 'have' | 'need', text: string) => void
+  deleteReq: (milestoneId: string, reqId: string) => void
+  toggleReq: (milestoneId: string, reqId: string) => void
 }
 
 export const useAeon = create<AeonStore>((set, get) => {
-  const commit = (mut: (s: AeonState) => void) =>
+  /** apply a recipe to local state, then persist the emitted mutations */
+  const run = (recipe: (s: AeonState) => Mutation[] | void) => {
+    let muts: Mutation[] = []
     set((state) => {
-      const next: AeonState = {
-        name: state.name,
-        dob: state.dob,
-        place: state.place,
-        activeHorizon: state.activeHorizon,
-        activeCat: state.activeCat,
-        milestones: state.milestones.map((m) => ({ ...m, have: [...m.have], need: [...m.need] })),
-        entries: Object.fromEntries(Object.entries(state.entries).map(([k, v]) => [k, [...v]])),
-      }
-      mut(next)
-      persist(next)
-      return next
+      const next = pick(state)
+      muts = recipe(next) || []
+      return { ...state, ...next }
     })
+    const backend = get().backend
+    if (backend && muts.length) {
+      const snap = pick(get())
+      Promise.all(muts.map((m) => backend.apply(m, snap))).catch((err) => {
+        console.error('[aeon] persist failed:', err)
+        set({ lastError: err?.message ? String(err.message) : 'Could not save changes.' })
+      })
+    }
+  }
 
   return {
-    ...initialState(),
+    ...emptyState(),
+    backend: null,
+    hydrated: false,
+    lastError: null,
 
     hasUser: () => !!(get().dob && get().name),
 
+    init: async (backend) => {
+      set({ backend, hydrated: false, lastError: null })
+      try {
+        const loaded = await backend.load()
+        if (loaded) {
+          set({ ...loaded, hydrated: true })
+        } else if (backend.mode === 'local') {
+          // fresh local visitor → pre-seed the demo so it isn't empty
+          const seeded: AeonState = { ...emptyState(), milestones: seedMilestones(), entries: seedEntries() }
+          set({ ...seeded, hydrated: true })
+          await backend.apply({ kind: 'seed', milestones: seeded.milestones, entries: seeded.entries }, seeded)
+        } else {
+          set({ ...emptyState(), hydrated: true })
+        }
+      } catch (err: any) {
+        console.error('[aeon] load failed:', err)
+        set({ ...emptyState(), hydrated: true, lastError: err?.message ?? 'Could not load your data.' })
+      }
+    },
+
+    reset: () => set({ ...emptyState(), backend: null, hydrated: false, lastError: null }),
+
     startStory: (name, dob, place) =>
-      commit((s) => {
+      run((s) => {
         s.name = name.trim() || 'Friend'
         s.dob = dob
         s.place = place.trim() || 'Earth'
+        const muts: Mutation[] = [{ kind: 'profile' }]
+        // first time onboarding into a fresh cloud account → seed the demo board
+        if (get().backend?.mode === 'cloud' && s.milestones.length === 0) {
+          const milestones = seedMilestones()
+          const entries = seedEntries()
+          s.milestones = milestones
+          s.entries = entries
+          muts.push({ kind: 'seed', milestones, entries })
+        }
+        return muts
       }),
 
-    setHorizon: (key) => commit((s) => { s.activeHorizon = String(key) }),
+    setHorizon: (key) =>
+      run((s) => {
+        s.activeHorizon = String(key)
+        return [{ kind: 'profile' }]
+      }),
 
-    setCat: (cat) => commit((s) => { s.activeCat = cat }),
+    setCat: (cat) =>
+      run((s) => {
+        s.activeCat = cat
+        return [{ kind: 'profile' }]
+      }),
 
-    addMilestone: (m) =>
-      commit((s) => {
-        s.milestones.push({ id: uid(), have: [], need: [], ...m })
-        s.activeHorizon = m.hz
+    addMilestone: (partial) =>
+      run((s) => {
+        const milestone: Milestone = { id: uid(), have: [], need: [], ...partial }
+        s.milestones.push(milestone)
+        s.activeHorizon = milestone.hz
+        return [{ kind: 'milestone', milestone }, { kind: 'profile' }]
+      }),
+
+    updateMilestone: (id, patch) =>
+      run((s) => {
+        const m = s.milestones.find((x) => x.id === id)
+        if (!m) return []
+        m.title = patch.title
+        m.why = patch.why
+        m.cat = patch.cat
+        m.hz = patch.hz
+        return [{ kind: 'updateMilestone', milestone: m }]
+      }),
+
+    deleteMilestone: (id) =>
+      run((s) => {
+        const i = s.milestones.findIndex((x) => x.id === id)
+        if (i < 0) return []
+        s.milestones.splice(i, 1)
+        return [{ kind: 'deleteMilestone', id }]
       }),
 
     addEntry: (key, time, text) =>
-      commit((s) => {
+      run((s) => {
         const t = text.trim()
-        if (!t) return
-        const list = s.entries[key] || (s.entries[key] = [])
-        list.push({ time: time || '12:00', t, d: '', cat: guessCat(t) })
+        if (!t) return []
+        const entry: Entry = { id: uid(), time: time || '12:00', t, d: '', cat: guessCat(t) }
+        ;(s.entries[key] ||= []).push(entry)
+        return [{ kind: 'entry', key, entry }]
       }),
 
-    addReq: (id, type, text) =>
-      commit((s) => {
+    addReq: (milestoneId, type, text) =>
+      run((s) => {
         const t = text.trim()
-        if (!t) return
-        const m = s.milestones.find((x) => x.id === id)
-        if (!m) return
-        const req: Requirement = { t, d: '' }
+        if (!t) return []
+        const m = s.milestones.find((x) => x.id === milestoneId)
+        if (!m) return []
+        const req = { id: uid(), t, d: '' }
         ;(type === 'have' ? m.have : m.need).push(req)
+        return [{ kind: 'requirement', milestoneId, reqKind: type, req }]
       }),
 
-    toggleReq: (id, type, index) =>
-      commit((s) => {
-        const m = s.milestones.find((x) => x.id === id)
-        if (!m) return
-        if (type === 'need') {
-          const [r] = m.need.splice(index, 1)
-          if (r) m.have.push(r)
-        } else {
-          const [r] = m.have.splice(index, 1)
-          if (r) m.need.push(r)
+    deleteReq: (milestoneId, reqId) =>
+      run((s) => {
+        const m = s.milestones.find((x) => x.id === milestoneId)
+        if (!m) return []
+        const inHave = m.have.findIndex((r) => r.id === reqId)
+        if (inHave >= 0) m.have.splice(inHave, 1)
+        else {
+          const inNeed = m.need.findIndex((r) => r.id === reqId)
+          if (inNeed < 0) return []
+          m.need.splice(inNeed, 1)
         }
+        return [{ kind: 'deleteRequirement', reqId }]
+      }),
+
+    toggleReq: (milestoneId, reqId) =>
+      run((s) => {
+        const m = s.milestones.find((x) => x.id === milestoneId)
+        if (!m) return []
+        const inNeed = m.need.findIndex((r) => r.id === reqId)
+        if (inNeed >= 0) {
+          const [r] = m.need.splice(inNeed, 1)
+          m.have.push(r)
+          return [{ kind: 'toggle', reqId, to: 'have' }]
+        }
+        const inHave = m.have.findIndex((r) => r.id === reqId)
+        if (inHave >= 0) {
+          const [r] = m.have.splice(inHave, 1)
+          m.need.push(r)
+          return [{ kind: 'toggle', reqId, to: 'need' }]
+        }
+        return []
       }),
   }
 })
@@ -209,7 +219,7 @@ export function entriesIn(
   d?: number,
 ) {
   if (d != null && m != null) return entries[`${y}-${m}-${d}`] || []
-  let out: AeonState['entries'][string] = []
+  let out: Entry[] = []
   for (const k of Object.keys(entries)) {
     const [ky, km] = k.split('-').map(Number)
     if (ky === y && (m == null || km === m)) out = out.concat(entries[k])

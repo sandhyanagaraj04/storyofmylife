@@ -1,10 +1,12 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAeon } from '../store'
+import { useAuth } from '../auth'
 
 export default function TopBar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const name = useAeon((s) => s.name)
+  const { mode, signOut } = useAuth()
 
   // timeline tab is active on the timeline + any drill view;
   // vision tab is active on the board + any milestone detail
@@ -33,6 +35,15 @@ export default function TopBar() {
       <div className="who">
         <span>{name || '—'}</span>
         <div className="avatar">{(name[0] || 'A').toUpperCase()}</div>
+        {mode === 'cloud' && (
+          <button
+            className="btn ghost sm"
+            style={{ marginLeft: 4 }}
+            onClick={async () => { await signOut(); navigate('/login') }}
+          >
+            Sign out
+          </button>
+        )}
       </div>
     </div>
   )
